@@ -7,6 +7,31 @@ const path = require('path');
 const archiver = require('archiver');
 const fs = require('fs');
 
+// CORS middleware for all routes
+router.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        res.header('Access-Control-Allow-Origin', origin);
+    } else {
+        res.header('Access-Control-Allow-Origin', '*');
+    }
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+    
+    next();
+});
+
+// Helper function to check if Spotify is configured
+function isSpotifyConfigured() {
+    return config.spotify.clientId !== 'missing_client_id' && 
+           config.spotify.clientSecret !== 'missing_client_secret';
+}
+
 // Get single track information from Spotify track URL
 router.post('/track-info', async (req, res) => {
     try {
@@ -14,6 +39,14 @@ router.post('/track-info', async (req, res) => {
         
         if (!trackUrl) {
             return res.status(400).json({ error: "Track URL is required" });
+        }
+
+        // Check if Spotify is configured
+        if (!isSpotifyConfigured()) {
+            return res.status(503).json({ 
+                error: "Spotify service not configured",
+                message: "Missing Spotify API credentials" 
+            });
         }
 
         // Authenticate and get track info
@@ -52,6 +85,14 @@ router.post('/playlist-info', async (req, res) => {
         
         if (!playlistUrl) {
             return res.status(400).json({ error: "Playlist URL is required" });
+        }
+
+        // Check if Spotify is configured
+        if (!isSpotifyConfigured()) {
+            return res.status(503).json({ 
+                error: "Spotify service not configured",
+                message: "Missing Spotify API credentials. Please contact the administrator." 
+            });
         }
 
         // Authenticate and get playlist info
@@ -214,14 +255,6 @@ router.get('/files/:filename', (req, res) => {
         console.log(`[FILE DOWNLOAD] Request for: ${filename} from origin: ${req.headers.origin || 'none'}`);
         console.log(`[FILE DOWNLOAD] Full file path: ${filePath}`);
 
-        // Set CORS headers explicitly for this endpoint
-        if (req.headers.origin) {
-            res.header('Access-Control-Allow-Origin', req.headers.origin);
-            res.header('Access-Control-Allow-Credentials', 'true');
-        } else {
-            res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
-        }
-
         // Set headers to prevent connection issues and handle large files
         res.header('Connection', 'keep-alive');
         res.header('Keep-Alive', 'timeout=300');
@@ -383,4 +416,4 @@ router.post('/download-selected', async (req, res) => {
     }
 });
 
-module.exports = router; 
+module.exports = router;
