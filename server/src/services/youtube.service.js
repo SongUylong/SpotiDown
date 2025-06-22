@@ -1,7 +1,5 @@
 const yts = require('yt-search');
-const ytdl = require('@distube/ytdl-core');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegStatic = require('ffmpeg-static');
+const { YtDlp } = require('ytdlp-nodejs');
 const config = require('../config');
 const { ensureDirectoryExists } = require('../utils/file.utils');
 const path = require('path');
@@ -9,22 +7,7 @@ const fs = require('fs');
 
 class YouTubeService {
     constructor() {
-        // Configure ytdl-core agent with better headers to avoid bot detection
-        this.ytdlOptions = {
-            filter: 'audioonly',
-            quality: 'highestaudio',
-            requestOptions: {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1'
-                }
-            }
-        };
+        this.ytdlp = new YtDlp();
     }
 
     async searchVideo(query) {
@@ -37,53 +20,6 @@ class YouTubeService {
         }
     }
 
-    async downloadAudioWithYtdl(url, outputPath) {
-        return new Promise((resolve, reject) => {
-            try {
-                // First check if the video is available
-                ytdl.getBasicInfo(url, this.ytdlOptions)
-                    .then(() => {
-                        const audioStream = ytdl(url, this.ytdlOptions);
-
-                        // Add error handling for the stream
-                        audioStream.on('error', (err) => {
-                            console.error('YouTube stream error:', err.message);
-                            if (err.message.includes('Sign in to confirm you\'re not a bot')) {
-                                reject(new Error('YouTube bot detection triggered. Please try again later or use a different video.'));
-                            } else {
-                                reject(new Error(`YouTube download failed: ${err.message}`));
-                            }
-                        });
-
-                        ffmpeg()
-                            .setFfmpegPath(ffmpegStatic)
-                            .input(audioStream)
-                            .audioBitrate(config.download.audioBitrate)
-                            .save(outputPath)
-                            .on('end', async () => {
-                                resolve();
-                            })
-                            .on('error', (err) => {
-                                console.error('FFmpeg error:', err.message);
-                                reject(new Error(`Audio conversion failed: ${err.message}`));
-                            });
-                    })
-                    .catch((err) => {
-                        console.error('YouTube video info error:', err.message);
-                        if (err.message.includes('Sign in to confirm you\'re not a bot')) {
-                            reject(new Error('YouTube bot detection triggered. Please try again later.'));
-                        } else if (err.message.includes('Video unavailable')) {
-                            reject(new Error('Video is unavailable or private.'));
-                        } else {
-                            reject(new Error(`Failed to access YouTube video: ${err.message}`));
-                        }
-                    });
-            } catch (err) {
-                reject(new Error(`Download setup failed: ${err.message}`));
-            }
-        });
-    }
-
     async downloadAudio(url, trackName) {
         const sanitizedTrackName = this.sanitizeFilename(trackName);
         const outputPath = path.join(config.paths.downloads, `${sanitizedTrackName}.mp3`);
@@ -91,22 +27,45 @@ class YouTubeService {
         await ensureDirectoryExists(config.paths.downloads);
 
         try {
-            // Use ytdl-core for downloading
-            console.log('[DOWNLOAD] Attempting download with ytdl-core...');
-            await this.downloadAudioWithYtdl(url, outputPath);
-        } catch (ytdlError) {
-            console.error('[DOWNLOAD] ytdl-core failed:', ytdlError.message);
+            console.log('[DOWNLOAD] Attempting download with yt-dlp...');
+            
+            // Check if yt-dlp is installed
+            const isInstalled = await this.ytdlp.checkInstallationAsync();
+            if (!isInstalled) {
+                throw new Error('yt-dlp is not installed. Please install it manually or restart the application.');
+            }
+
+            // Download audio using yt-dlp with audio-only format
+            await this.ytdlp.downloadAsync(url, {
+                format: {
+                    filter: 'audioonly',
+                    type: 'mp3',
+                    quality: 'highest'
+                },
+                output: outputPath,
+                onProgress: (progress) => {
+                    if (progress.percent) {
+                        console.log(`[DOWNLOAD] Progress: ${progress.percent}%`);
+                    }
+                }
+            });
+
+            console.log('[DOWNLOAD] yt-dlp download completed');
+
+        } catch (ytdlpError) {
+            console.error('[DOWNLOAD] yt-dlp failed:', ytdlpError.message);
             
             // Provide helpful error messages for common issues
-            if (ytdlError.message.includes('bot detection') || 
-                ytdlError.message.includes('Sign in to confirm')) {
-                throw new Error('YouTube has detected automated access. Please try again later or try a different track.');
-            } else if (ytdlError.message.includes('Video unavailable')) {
+            if (ytdlpError.message.includes('Video unavailable')) {
                 throw new Error('This video is unavailable, private, or has been removed from YouTube.');
-            } else if (ytdlError.message.includes('no such file or directory')) {
-                throw new Error('Download failed due to file system issues. Please try again.');
+            } else if (ytdlpError.message.includes('not installed')) {
+                throw new Error('Download tool not available. Please try again later.');
+            } else if (ytdlpError.message.includes('HTTP Error 429')) {
+                throw new Error('YouTube is rate limiting requests. Please try again later.');
+            } else if (ytdlpError.message.includes('Sign in to confirm')) {
+                throw new Error('YouTube has detected automated access. Please try again later.');
             } else {
-                throw new Error(`Download failed: ${ytdlError.message}. Please try again or try a different track.`);
+                throw new Error(`Download failed: ${ytdlpError.message}. Please try again or try a different track.`);
             }
         }
 
@@ -114,7 +73,7 @@ class YouTubeService {
         const filename = path.basename(outputPath);
         
         // Add a small delay and verify file exists and is readable
-        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1000ms delay
         
         try {
             await fs.promises.access(outputPath, fs.constants.F_OK | fs.constants.R_OK);
