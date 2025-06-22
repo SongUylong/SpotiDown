@@ -11,51 +11,75 @@ class DownloadManagerService {
     }
 
     async downloadSingleTrack(track, isBatchDownload = false) {
-        try {
-            const songName = `${track.artist} - ${track.name}`;
-            // Use just the song name for the filename to keep it simple
-            const simpleFileName = track.name;
+        const maxRetries = 3;
+        let lastError = null;
 
-            // Search on YouTube
-            const query = `${track.name} ${track.artist}`;
-            const youtubeUrl = await youtubeService.searchVideo(query);
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const songName = `${track.artist} - ${track.name}`;
+                // Use just the song name for the filename to keep it simple
+                const simpleFileName = track.name;
 
-            if (!youtubeUrl) {
+                // Search on YouTube
+                const query = `${track.name} ${track.artist}`;
+                const youtubeUrl = await youtubeService.searchVideo(query);
+
+                if (!youtubeUrl) {
+                    return {
+                        status: 'failed',
+                        track: songName,
+                        error: 'No YouTube results found'
+                    };
+                }
+
+                console.log(`[DOWNLOAD] Attempt ${attempt}/${maxRetries} for: ${songName}`);
+
+                // Download and convert using simple filename
+                const filename = await youtubeService.downloadAudio(youtubeUrl, simpleFileName);
+
+                // Different cleanup times for single vs batch downloads
+                if (isBatchDownload) {
+                    // Batch downloads: 10 minutes (users might download multiple files)
+                    this.scheduleFileCleanup(filename, 10 * 60 * 1000);
+                    var messageText = 'Download completed - file will be available for 10 minutes';
+                } else {
+                    // Single downloads: 2 minutes (faster cleanup for individual tracks)
+                    this.scheduleFileCleanup(filename, 2 * 60 * 1000);
+                    var messageText = 'Download completed - file will be available for 2 minutes';
+                }
+
                 return {
-                    status: 'failed',
+                    status: 'DOWNLOADED',
                     track: songName,
-                    error: 'No YouTube results found'
+                    filename: filename,
+                    message: messageText
                 };
+
+            } catch (err) {
+                lastError = err;
+                console.error(`[DOWNLOAD] Attempt ${attempt}/${maxRetries} failed for ${track.artist} - ${track.name}:`, err.message);
+
+                // If it's a bot detection error and we have retries left, wait and try again
+                if (err.message.includes('bot detection') && attempt < maxRetries) {
+                    const delayMs = attempt * 2000; // Exponential backoff: 2s, 4s, 6s
+                    console.log(`[DOWNLOAD] Bot detection encountered. Waiting ${delayMs}ms before retry...`);
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                    continue;
+                }
+
+                // If it's the last attempt or a non-retryable error, break
+                if (attempt === maxRetries || 
+                    !err.message.includes('bot detection')) {
+                    break;
+                }
             }
-
-            // Download and convert using simple filename
-            const filename = await youtubeService.downloadAudio(youtubeUrl, simpleFileName);
-
-            // Different cleanup times for single vs batch downloads
-            if (isBatchDownload) {
-                // Batch downloads: 10 minutes (users might download multiple files)
-                this.scheduleFileCleanup(filename, 10 * 60 * 1000);
-                var messageText = 'Download completed - file will be available for 10 minutes';
-            } else {
-                // Single downloads: 2 minutes (faster cleanup for individual tracks)
-                this.scheduleFileCleanup(filename, 2 * 60 * 1000);
-                var messageText = 'Download completed - file will be available for 2 minutes';
-            }
-
-            return {
-                status: 'DOWNLOADED',
-                track: songName,
-                filename: filename,
-                message: messageText
-            };
-
-        } catch (err) {
-            return {
-                status: 'failed',
-                track: `${track.artist} - ${track.name}`,
-                error: err.message
-            };
         }
+
+        return {
+            status: 'failed',
+            track: `${track.artist} - ${track.name}`,
+            error: lastError ? lastError.message : 'Unknown error occurred'
+        };
     }
 
     async downloadMultipleTracks(tracks) {
