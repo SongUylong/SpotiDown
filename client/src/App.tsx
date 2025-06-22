@@ -3,7 +3,6 @@ import { PlaylistInput } from './components/PlaylistInput';
 import { TrackList } from './components/TrackList';
 import { SingleTrackDisplay } from './components/SingleTrackDisplay';
 import { api } from './services/api';
-import { CONFIG } from './constants/config';
 import type { Track, PlaylistInfo, DownloadProgress } from './types/spotify';
 
 export default function App() {

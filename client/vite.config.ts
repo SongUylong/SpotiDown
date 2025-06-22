@@ -13,8 +13,8 @@ export default defineConfig({
         secure: false,
         timeout: 0, // Disable timeout
         proxyTimeout: 0, // Disable proxy timeout
-        configure: (proxy, options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
             // Set keep-alive headers for better connection handling
             proxyReq.setHeader('Connection', 'keep-alive');
             proxyReq.setHeader('Keep-Alive', 'timeout=0');
