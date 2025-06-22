@@ -1,6 +1,5 @@
 const yts = require('yt-search');
 const ytdl = require('@distube/ytdl-core');
-const youtubedl = require('youtube-dl-exec');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 const config = require('../config');
@@ -85,37 +84,6 @@ class YouTubeService {
         });
     }
 
-    async downloadAudioWithYoutubeDl(url, outputPath) {
-        return new Promise((resolve, reject) => {
-            try {
-                console.log('[FALLBACK] Using youtube-dl-exec as fallback method');
-                
-                youtubedl(url, {
-                    extractAudio: true,
-                    audioFormat: 'mp3',
-                    audioQuality: '320K',
-                    output: outputPath.replace('.mp3', '.%(ext)s'),
-                    noPlaylist: true,
-                    preferFreeFormats: true,
-                    addHeader: [
-                        'referer:youtube.com',
-                        'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    ]
-                })
-                .then(() => {
-                    console.log('[FALLBACK] youtube-dl-exec download completed');
-                    resolve();
-                })
-                .catch((err) => {
-                    console.error('[FALLBACK] youtube-dl-exec failed:', err.message);
-                    reject(new Error(`Fallback download failed: ${err.message}`));
-                });
-            } catch (err) {
-                reject(new Error(`Fallback setup failed: ${err.message}`));
-            }
-        });
-    }
-
     async downloadAudio(url, trackName) {
         const sanitizedTrackName = this.sanitizeFilename(trackName);
         const outputPath = path.join(config.paths.downloads, `${sanitizedTrackName}.mp3`);
@@ -123,23 +91,22 @@ class YouTubeService {
         await ensureDirectoryExists(config.paths.downloads);
 
         try {
-            // Try ytdl-core first
+            // Use ytdl-core for downloading
             console.log('[DOWNLOAD] Attempting download with ytdl-core...');
             await this.downloadAudioWithYtdl(url, outputPath);
         } catch (ytdlError) {
-            console.log('[DOWNLOAD] ytdl-core failed, trying youtube-dl-exec...');
+            console.error('[DOWNLOAD] ytdl-core failed:', ytdlError.message);
             
-            // If ytdl-core fails with bot detection, try youtube-dl-exec
+            // Provide helpful error messages for common issues
             if (ytdlError.message.includes('bot detection') || 
                 ytdlError.message.includes('Sign in to confirm')) {
-                
-                try {
-                    await this.downloadAudioWithYoutubeDl(url, outputPath);
-                } catch (fallbackError) {
-                    throw new Error(`Both download methods failed. ytdl-core: ${ytdlError.message}, youtube-dl: ${fallbackError.message}`);
-                }
+                throw new Error('YouTube has detected automated access. Please try again later or try a different track.');
+            } else if (ytdlError.message.includes('Video unavailable')) {
+                throw new Error('This video is unavailable, private, or has been removed from YouTube.');
+            } else if (ytdlError.message.includes('no such file or directory')) {
+                throw new Error('Download failed due to file system issues. Please try again.');
             } else {
-                throw ytdlError;
+                throw new Error(`Download failed: ${ytdlError.message}. Please try again or try a different track.`);
             }
         }
 
