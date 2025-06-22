@@ -37,7 +37,12 @@ const corsOptions = {
     'http://127.0.0.1:5173', // Alternative localhost
     'http://127.0.0.1:3000',
     // Production domains
-    'https://spotidown-e2ys.onrender.com'
+    'https://spotidown-e2ys.onrender.com',
+    'https://spoti-down-iota.vercel.app',
+    // Add more flexibility for deployment
+    'https://spoti-down-iota.vercel.app',
+    'https://spotidown.vercel.app',
+    'https://spotidown.netlify.app'
   ],
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],

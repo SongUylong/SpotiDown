@@ -1,6 +1,6 @@
 export const CONFIG = {
     API: {
-        BASE_URL: '/api',
+        BASE_URL: import.meta.env.VITE_API_BASE_URL || '/api',
         ENDPOINTS: {
             PLAYLIST_INFO: '/download/playlist-info',
             DOWNLOAD_SONG: '/download/song',
