@@ -152,13 +152,15 @@ class YouTubeService {
         // Check for cookie file and prioritize it
         const hasCookieFile = await this.checkCookieFile();
         
-        // Try different strategies in order, prioritizing manual cookie file if available
+        // Try different strategies in order, prioritizing server-friendly methods
         let strategies;
         if (hasCookieFile) {
-            strategies = ['cookieFile', 'firefox', 'chrome', 'edge', 'minimal', 'fallback'];
+            // If we have a manual cookie file, use it first
+            strategies = ['cookieFile', 'default', 'minimal', 'fallback', 'firefox', 'chrome', 'edge'];
             console.log('[DOWNLOAD] Found cookies.txt file, prioritizing manual cookies');
         } else {
-            strategies = ['default', 'firefox', 'chrome', 'edge', 'minimal', 'fallback'];
+            // For server environments (like Render), prioritize methods that don't need browsers
+            strategies = ['default', 'minimal', 'fallback', 'firefox', 'chrome', 'edge'];
         }
         
         let lastError = null;
@@ -173,6 +175,15 @@ class YouTubeService {
                 console.error(`[DOWNLOAD] Strategy ${strategy} failed:`, error.message);
                 lastError = error;
                 
+                // If it's a browser cookie error (common on servers), try next strategy immediately
+                if (error.message.includes('could not find firefox cookies') ||
+                    error.message.includes('could not find chrome cookies') ||
+                    error.message.includes('could not find edge cookies') ||
+                    error.message.includes('cookies database')) {
+                    console.log(`[DOWNLOAD] Browser cookies not available (normal on servers), trying next strategy...`);
+                    continue;
+                }
+                
                 // If it's a bot detection error, continue to next strategy
                 if (error.message.includes('Sign in to confirm') || 
                     error.message.includes('not a bot') ||
@@ -186,8 +197,8 @@ class YouTubeService {
                     continue;
                 }
                 
-                // For other errors, break and throw
-                break;
+                // For other errors, continue to next strategy
+                continue;
             }
         }
 
@@ -204,6 +215,9 @@ class YouTubeService {
                 throw new Error('This video is unavailable, private, or has been removed from YouTube.');
             } else if (lastError.message.includes('HTTP Error 429')) {
                 throw new Error('YouTube is rate limiting requests. Please wait a few minutes before trying again.');
+            } else if (lastError.message.includes('cookies database') || 
+                       lastError.message.includes('could not find firefox cookies')) {
+                throw new Error('Server configuration issue with browser cookies. This is normal on cloud platforms. Try uploading a manual cookies.txt file or use a different track.');
             } else {
                 throw new Error(`Download failed: ${lastError.message}. Please try again or try a different track.`);
             }
