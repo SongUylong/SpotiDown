@@ -30,14 +30,14 @@ app.use((req, res, next) => {
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
 const corsOptions = {
-  origin: isDevelopment ? [
+  origin: [
+    // Development origins
     'http://localhost:5173', // Vite dev server
     'http://localhost:3000', // Alternative React dev server
     'http://127.0.0.1:5173', // Alternative localhost
     'http://127.0.0.1:3000',
-  ] : [
-    // Add your production domains here
-    // 'https://yourdomain.com'
+    // Production domains
+    'https://spotidown-e2ys.onrender.com'
   ],
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
