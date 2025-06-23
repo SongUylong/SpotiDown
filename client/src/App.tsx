@@ -182,6 +182,31 @@ export default function App() {
             </header>
 
             <main className="w-full py-8 px-4 sm:px-6 lg:px-8 h-full">
+                {/* Offline Notice Banner */}
+                <div className="max-w-4xl mx-auto mb-6">
+                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-lg shadow-sm">
+                        <div className="flex items-start">
+                            <div className="flex-shrink-0">
+                                <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div className="ml-3">
+                                <h3 className="text-sm font-medium text-amber-800">
+                                    Currently Offline Only
+                                </h3>
+                                <div className="mt-1 text-sm text-amber-700">
+                                    <p>
+                                        This application is not yet available online. To use SpotiDown, please{' '}
+                                        <span className="font-semibold">clone the repository</span> and run it locally on your machine.
+                                    </p>
+                                </div>
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
                     <PlaylistInput 
                         onPlaylistSubmit={handlePlaylistSubmit} 
